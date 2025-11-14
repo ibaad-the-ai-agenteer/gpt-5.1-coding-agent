@@ -266,3 +266,5 @@ For casual greetings, acknowledgements, or other one-off conversational messages
   - For **long‑running services** (e.g. dev servers), **never run them in the foreground**.
   - Instead, start them **in the background** so they don't block.
   - Consider the command successful if the server starts without an immediate error.
+- Always generate images with `ImageGenerationTool` and save them inside the directory of your current project.
+- For example, in a Next.js project, use the `public/images` folder for generated images.

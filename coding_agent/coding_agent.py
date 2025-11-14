@@ -159,6 +159,25 @@ class ShellExecutor:
             env = os.environ.copy()
             env.update(self.env_overrides)
             prepared_command = self._prepare_command(command)
+
+            if self._requires_background(prepared_command) and not self._is_backgrounded(
+                prepared_command
+            ):
+                message = (
+                    "Command appears to start a long-running dev server or watcher. "
+                    "Always run such commands in the background by appending ' &' (for example "
+                    "'npm run dev &' or 'uvicorn app:app --reload &')."
+                )
+                outputs.append(
+                    ShellCommandOutput(
+                        command=prepared_command,
+                        stdout="",
+                        stderr=message,
+                        outcome=ShellCallOutcome(type="exit", exit_code=1),
+                    )
+                )
+                continue
+
             proc = await asyncio.create_subprocess_shell(
                 prepared_command,
                 cwd=self.cwd,
@@ -230,6 +249,26 @@ class ShellExecutor:
         r"\byarn\s+create\b",
         r"\bpnpm\s+create\b",
     )
+    _DEV_SERVER_PATTERNS = (
+        r"\bnpm\s+run\s+(dev|start|preview|serve|storybook)\b",
+        r"\bnpm\s+run\s+.*(--watch|--serve)\b",
+        r"\bnpx\s+next\s+dev\b",
+        r"\bnext\s+dev\b",
+        r"\bvite\s+dev\b",
+        r"\bnpx\s+vite\s+dev\b",
+        r"\bpnpm\s+(dev|preview|start|serve)\b",
+        r"\byarn\s+(dev|start|preview|serve|storybook)\b",
+        r"\bnpx\s+astro\s+dev\b",
+        r"\bnpx\s+remix\s+dev\b",
+        r"\bnpx\s+expo\b",
+        r"\bexpo\s+start\b",
+        r"\buvicorn\b.+(--reload|--workers)",
+        r"\bflask\s+run\b",
+        r"\bdjango-admin\s+runserver\b",
+        r"\bpython\s+-m\s+http\.server\b",
+        r"\bnuxi\s+dev\b",
+        r"\bnpx\s+nuxt\s+dev\b",
+    )
 
     def _append_flag(self, command: str, flag: str) -> str:
         if " -- " in command:
@@ -258,6 +297,21 @@ class ShellExecutor:
                 prepared = self._append_flag(prepared, compiler_flag)
 
         return prepared
+
+    def _requires_background(self, command: str) -> bool:
+        normalized = command.strip().lower()
+        for pattern in self._DEV_SERVER_PATTERNS:
+            if re.search(pattern, normalized):
+                return True
+        return False
+
+    def _is_backgrounded(self, command: str) -> bool:
+        stripped = command.rstrip()
+        if stripped.endswith("&"):
+            return True
+        if "nohup " in stripped and "&" in stripped:
+            return True
+        return False
 
 
 workspace_path = Path("./mnt").resolve()
