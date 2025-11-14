@@ -1,10 +1,12 @@
 from agents import ModelSettings
 from agency_swarm import Agent, WebSearchTool, ImageGenerationTool, ImageGeneration
+from agency_swarm.tools import PersistentShellTool
 from openai.types.shared import Reasoning
 
 from agents import ApplyPatchTool, apply_diff
 from agents.editor import ApplyPatchOperation, ApplyPatchResult
 from agents import ShellCommandRequest, ShellCommandOutput, ShellResult, ShellCallOutcome, ShellTool
+from .tools.UpdatePlanTool import UpdatePlan
 import hashlib
 import os
 from pathlib import Path
@@ -96,85 +98,17 @@ class WorkspaceEditor:
         self._approvals.remember(fingerprint)
 
 
-class ShellExecutor:
-    """Executes shell commands with optional approval."""
-
-    def __init__(self, cwd: Path | None = None):
-        self.cwd = Path(cwd or Path.cwd())
-
-    async def __call__(self, request: ShellCommandRequest) -> ShellResult:
-        action = request.data.action
-
-        outputs: list[ShellCommandOutput] = []
-        for command in action.commands:
-            proc = await asyncio.create_subprocess_shell(
-                command,
-                cwd=self.cwd,
-                env=os.environ.copy(),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            timed_out = False
-            try:
-                # If no timeout is provided, use a sensible default so that long-running
-                # commands (e.g. dev servers) do not block the agent forever. When the
-                # timeout is reached, we intentionally DO NOT kill the process, effectively
-                # treating it as a background task that continues running.
-                default_timeout_s = float(os.environ.get("CODING_AGENT_SHELL_TIMEOUT_SECONDS", "30"))
-                timeout = (
-                    (action.timeout_ms / 1000)
-                    if action.timeout_ms is not None
-                    else default_timeout_s
-                )
-
-                stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout
-                )
-            except asyncio.TimeoutError:
-                timed_out = True
-                # Leave the process running in the background. We won't wait for any
-                # more output here; instead, report that the command is still running.
-                stdout_bytes = b""
-                stderr_bytes = (
-                    f"Command exceeded timeout of {timeout} seconds and is still running "
-                    f"in the background (pid={proc.pid})."
-                ).encode("utf-8")
-
-            stdout = stdout_bytes.decode("utf-8", errors="ignore")
-            stderr = stderr_bytes.decode("utf-8", errors="ignore")
-            outputs.append(
-                ShellCommandOutput(
-                    command=command,
-                    stdout=stdout,
-                    stderr=stderr,
-                    outcome=ShellCallOutcome(
-                        type="timeout" if timed_out else "exit",
-                        exit_code=getattr(proc, "returncode", None),
-                    ),
-                )
-            )
-
-            if timed_out:
-                break
-
-        return ShellResult(
-            output=outputs,
-            provider_data={"working_directory": str(self.cwd)},
-        )
-
-
 workspace_path = Path("./mnt").resolve()
 approvals = ApprovalTracker()
 editor = WorkspaceEditor(workspace_path, approvals, auto_approve=True)
-tool = ApplyPatchTool(editor=editor)
-shell_tool = ShellTool(executor=ShellExecutor(cwd=workspace_path))
+apply_patch_tool = ApplyPatchTool(editor=editor)
 
 coding_agent = Agent(
     name="CodingAgent",
     description="A gpt-5.1-based coding assistant template with no tools or instructions configured.",
     instructions="./instructions.md",
     model="gpt-5.1-codex",
-    tools=[tool, shell_tool, WebSearchTool()],
+    tools=[apply_patch_tool, WebSearchTool(), PersistentShellTool, UpdatePlan],
     model_settings=ModelSettings(
         reasoning=Reasoning(
             effort="medium",
