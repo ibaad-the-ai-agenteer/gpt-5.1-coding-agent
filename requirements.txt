@@ -1,4 +1,3 @@
 agency-swarm[fastapi]>=1.2.1
 fastapi
 uvicorn
-pytest>=8.2

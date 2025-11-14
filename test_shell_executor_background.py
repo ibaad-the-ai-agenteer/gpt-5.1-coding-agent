@@ -34,10 +34,20 @@ async def run_background_process_test() -> None:
     call_data = ShellCallData(call_id="test_background", action=action)
     request = ShellCommandRequest(ctx_wrapper=None, data=call_data)  # type: ignore[arg-type]
 
-    executor = ShellExecutor(cwd=workspace_dir)
+    # Ensure background mode is enabled for this test so that the process keeps
+    # running after the timeout fires.
+    previous_background_setting = os.environ.get("CODING_AGENT_SHELL_BACKGROUND_ON_TIMEOUT")
+    os.environ["CODING_AGENT_SHELL_BACKGROUND_ON_TIMEOUT"] = "1"
+    try:
+        executor = ShellExecutor(cwd=workspace_dir)
 
-    # Run the shell executor – this should return after ~0.5s due to timeout.
-    await executor(request)
+        # Run the shell executor – this should return after ~0.5s due to timeout.
+        await executor(request)
+    finally:
+        if previous_background_setting is None:
+            os.environ.pop("CODING_AGENT_SHELL_BACKGROUND_ON_TIMEOUT", None)
+        else:
+            os.environ["CODING_AGENT_SHELL_BACKGROUND_ON_TIMEOUT"] = previous_background_setting
 
     # Wait long enough for the background process (if still running) to finish
     # and write the marker file.
