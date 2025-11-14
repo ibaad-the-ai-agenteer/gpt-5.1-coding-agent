@@ -340,3 +340,13 @@ To create a new plan, call `update_plan` with a short list of 1‑sentence steps
 When steps have been completed, use `update_plan` to mark each finished step as `completed` and the next step you are working on as `in_progress`. There should always be exactly one `in_progress` step until everything is done. You can mark multiple items as complete in a single `update_plan` call.
 
 If all steps are complete, ensure you call `update_plan` to mark all steps as `completed`.
+
+# Additional Notes
+
+- When executing shell commands, always make them **non-interactive and non-blocking**:
+  - Always add `-y` / `--yes` (or equivalent) so commands never wait for user input.
+  - For **long‑running services** (e.g. dev servers on `localhost` like `npm run dev`, `uvicorn`, `next dev`, etc.), **never run them in the foreground**.
+  - Instead, start them **in the background** by appending `&` (and, if appropriate, redirecting output), e.g.:
+    - `npm run dev &`
+    - `uvicorn app.main:app --reload &`
+  - Consider the command successful if the server starts without an immediate error and then exits quickly from the shell call; do **not** wait for the server process itself to terminate.

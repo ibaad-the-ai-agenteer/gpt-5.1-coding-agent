@@ -9,7 +9,6 @@ import hashlib
 import os
 from pathlib import Path
 import asyncio
-from typing import Sequence
 
 class ApprovalTracker:
     def __init__(self) -> None:
@@ -117,14 +116,29 @@ class ShellExecutor:
             )
             timed_out = False
             try:
-                timeout = (action.timeout_ms or 0) / 1000 or None
+                # If no timeout is provided, use a sensible default so that long-running
+                # commands (e.g. dev servers) do not block the agent forever. When the
+                # timeout is reached, we intentionally DO NOT kill the process, effectively
+                # treating it as a background task that continues running.
+                default_timeout_s = float(os.environ.get("CODING_AGENT_SHELL_TIMEOUT_SECONDS", "30"))
+                timeout = (
+                    (action.timeout_ms / 1000)
+                    if action.timeout_ms is not None
+                    else default_timeout_s
+                )
+
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
                     proc.communicate(), timeout=timeout
                 )
             except asyncio.TimeoutError:
-                proc.kill()
-                stdout_bytes, stderr_bytes = await proc.communicate()
                 timed_out = True
+                # Leave the process running in the background. We won't wait for any
+                # more output here; instead, report that the command is still running.
+                stdout_bytes = b""
+                stderr_bytes = (
+                    f"Command exceeded timeout of {timeout} seconds and is still running "
+                    f"in the background (pid={proc.pid})."
+                ).encode("utf-8")
 
             stdout = stdout_bytes.decode("utf-8", errors="ignore")
             stderr = stderr_bytes.decode("utf-8", errors="ignore")
@@ -159,12 +173,8 @@ coding_agent = Agent(
     name="CodingAgent",
     description="A gpt-5.1-based coding assistant template with no tools or instructions configured.",
     instructions="./instructions.md",
-    model="gpt-5.1",
-    tools=[tool, shell_tool, WebSearchTool(), ImageGenerationTool(
-        tool_config=ImageGeneration(
-            type="image_generation",
-        ),
-    )],
+    model="gpt-5.1-codex",
+    tools=[tool, shell_tool, WebSearchTool()],
     model_settings=ModelSettings(
         reasoning=Reasoning(
             effort="medium",
