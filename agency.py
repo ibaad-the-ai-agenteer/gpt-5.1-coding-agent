@@ -12,7 +12,7 @@ load_dotenv()
 def create_agency(load_threads_callback=None):
     agency = Agency(
         coding_agent,
-        communication_flows=[coding_agent, agent2],
+        communication_flows=[coding_agent, code],
         name="CodingAgency",
         shared_instructions="shared_instructions.md",
         load_threads_callback=load_threads_callback,
