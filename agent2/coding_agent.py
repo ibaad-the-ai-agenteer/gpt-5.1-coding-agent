@@ -7,7 +7,7 @@ coding_agent = Agent(
     name="CodingAgent",
     description="A gpt-5.1-based coding assistant template with no tools or instructions configured.",
     instructions="./instructions.md",
-    model="gpt-5.1-codex",
+    model="gpt-5.2",
     
     model_settings=ModelSettings(
         reasoning=Reasoning(
