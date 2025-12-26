@@ -1,4 +1,4 @@
-from .code import coding_agent
+from .coding_agent import code
 
 
 

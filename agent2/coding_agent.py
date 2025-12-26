@@ -1,7 +1,6 @@
 from agents import ModelSettings
 from agency_swarm import Agent, WebSearchTool
 from openai.types.shared import Reasoning
-from coding_agent.tools import apply_patch, shell_tool, OpenAIImageGenerationTool, update_plan
 
 code = Agent(
     name="CodingAgent",
